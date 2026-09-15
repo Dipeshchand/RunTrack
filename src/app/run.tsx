@@ -1,22 +1,33 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import { useRunTracking } from "../hooks/useRunTracking";
 
 export default function RunScreen() {
   const {
     isTracking,
+    isPaused,
     currentLocation,
     locationPoints,
     distance,
+    pace,
     elapsedTime,
     startTracking,
+    pauseTracking,
+    resumeTracking,
     stopTracking,
   } = useRunTracking();
 
-  // Convert meters → kilometers
   const distanceInKilometers = distance / 1000;
 
-  // Convert seconds → HH:MM:SS
+  const mapRegion = currentLocation
+    ? {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      }
+    : undefined;
+
   const formatTime = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
 
@@ -29,10 +40,26 @@ export default function RunScreen() {
       .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   };
 
+  const formatPace = (paceSeconds: number | null) => {
+    if (paceSeconds === null || !Number.isFinite(paceSeconds)) {
+      return "--:--";
+    }
+
+    const minutes = Math.floor(paceSeconds / 60);
+
+    const seconds = Math.floor(paceSeconds % 60);
+
+    return `${minutes.toString().padStart(2, "0")}:${seconds
+      .toString()
+      .padStart(2, "0")}`;
+  };
+
   return (
     <View style={styles.container}>
-      {/* STATUS */}
-      <Text style={styles.title}>{isTracking ? "RUNNING 🟢" : "READY"}</Text>
+      {/* RUN STATUS */}
+      <Text style={styles.title}>
+        {isPaused ? "PAUSED ⏸️" : isTracking ? "RUNNING 🟢" : "READY"}
+      </Text>
 
       {/* DISTANCE */}
       <View style={styles.distanceContainer}>
@@ -48,10 +75,50 @@ export default function RunScreen() {
         <Text style={styles.timer}>{formatTime(elapsedTime)}</Text>
       </View>
 
+      {/* PACE */}
+      <View style={styles.paceContainer}>
+        <Text style={styles.paceLabel}>PACE</Text>
+
+        <Text style={styles.pace}>{formatPace(pace)} /km</Text>
+      </View>
+
+      {/* MAP */}
+      {currentLocation && (
+        <View style={styles.mapContainer}>
+          <MapView
+            provider={PROVIDER_GOOGLE}
+            style={styles.map}
+            region={mapRegion}
+            showsUserLocation={true}
+            showsMyLocationButton={true}
+          >
+            {/* ROUTE */}
+            {locationPoints.length > 1 && (
+              <Polyline
+                coordinates={locationPoints.map((point) => ({
+                  latitude: point.latitude,
+                  longitude: point.longitude,
+                }))}
+                strokeWidth={5}
+              />
+            )}
+
+            {/* CURRENT LOCATION */}
+            <Marker
+              coordinate={{
+                latitude: currentLocation.latitude,
+                longitude: currentLocation.longitude,
+              }}
+              title="You"
+            />
+          </MapView>
+        </View>
+      )}
+
       {/* GPS POINT COUNT */}
       <Text style={styles.points}>GPS Points: {locationPoints.length}</Text>
 
-      {/* CURRENT GPS */}
+      {/* CURRENT GPS INFORMATION */}
       {currentLocation && (
         <View style={styles.locationCard}>
           <Text style={styles.locationTitle}>Current GPS</Text>
@@ -73,14 +140,35 @@ export default function RunScreen() {
         </View>
       )}
 
-      {/* START / STOP */}
-      {!isTracking ? (
+      {/* BUTTONS */}
+      {isPaused ? (
+        <>
+          {/* RESUME */}
+          <Pressable style={styles.startButton} onPress={resumeTracking}>
+            <Text style={styles.buttonText}>RESUME RUN</Text>
+          </Pressable>
+
+          {/* STOP */}
+          <Pressable style={styles.stopButton} onPress={stopTracking}>
+            <Text style={styles.buttonText}>STOP RUN</Text>
+          </Pressable>
+        </>
+      ) : isTracking ? (
+        <>
+          {/* PAUSE */}
+          <Pressable style={styles.pauseButton} onPress={pauseTracking}>
+            <Text style={styles.buttonText}>PAUSE RUN</Text>
+          </Pressable>
+
+          {/* STOP */}
+          <Pressable style={styles.stopButton} onPress={stopTracking}>
+            <Text style={styles.buttonText}>STOP RUN</Text>
+          </Pressable>
+        </>
+      ) : (
+        /* START */
         <Pressable style={styles.startButton} onPress={startTracking}>
           <Text style={styles.buttonText}>START TRACKING</Text>
-        </Pressable>
-      ) : (
-        <Pressable style={styles.stopButton} onPress={stopTracking}>
-          <Text style={styles.buttonText}>STOP RUN</Text>
         </Pressable>
       )}
     </View>
@@ -136,6 +224,35 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  paceContainer: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+
+  paceLabel: {
+    fontSize: 14,
+    color: "#777777",
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+
+  pace: {
+    fontSize: 28,
+    fontWeight: "700",
+  },
+
+  mapContainer: {
+    height: 300,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 20,
+  },
+
+  map: {
+    width: "100%",
+    height: "100%",
+  },
+
   points: {
     textAlign: "center",
     color: "#666666",
@@ -166,6 +283,15 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
+    marginBottom: 12,
+  },
+
+  pauseButton: {
+    backgroundColor: "#F59E0B",
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 12,
   },
 
   stopButton: {
@@ -173,6 +299,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
+    marginBottom: 12,
   },
 
   buttonText: {

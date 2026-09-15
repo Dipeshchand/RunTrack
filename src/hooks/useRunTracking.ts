@@ -10,38 +10,74 @@ export type LocationPoint = {
 
 export function useRunTracking() {
   const [isTracking, setIsTracking] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
 
   const [locationPoints, setLocationPoints] = useState<LocationPoint[]>([]);
-
   const [currentLocation, setCurrentLocation] =
     useState<LocationPoint | null>(null);
 
   const [distance, setDistance] = useState(0);
 
-  // NEW: elapsed running time in seconds
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [pace, setPace] = useState<number | null>(null);
 
   const locationSubscription =
     useRef<Location.LocationSubscription | null>(null);
 
-  // NEW: stores the exact time when the run starts
   const startTimeRef = useRef<number | null>(null);
 
-  // Calculate distance between two GPS points
+  // Stores the elapsed running time when the run is paused.
+  const pausedElapsedTimeRef = useRef(0);
+
+  /*
+   * Calculate pace.
+   *
+   * Pace = elapsed time / distance
+   *
+   * Example:
+   * 1800 seconds / 5 km = 360 seconds/km = 6:00/km
+   */
+  useEffect(() => {
+    if (distance <= 0 || elapsedTime <= 0) {
+      setPace(null);
+      return;
+    }
+
+    const distanceInKilometers = distance / 1000;
+
+    const paceSecondsPerKm =
+      elapsedTime / distanceInKilometers;
+
+    setPace(paceSecondsPerKm);
+  }, [distance, elapsedTime]);
+
+  /*
+   * Haversine formula.
+   *
+   * Calculates the distance between two GPS coordinates
+   * on the surface of the Earth.
+   */
   const calculateDistance = (
     point1: LocationPoint,
     point2: LocationPoint
   ) => {
     const earthRadius = 6371000;
 
-    const latitude1 = (point1.latitude * Math.PI) / 180;
-    const latitude2 = (point2.latitude * Math.PI) / 180;
+    const latitude1 =
+      (point1.latitude * Math.PI) / 180;
+
+    const latitude2 =
+      (point2.latitude * Math.PI) / 180;
 
     const latitudeDifference =
-      ((point2.latitude - point1.latitude) * Math.PI) / 180;
+      ((point2.latitude - point1.latitude) *
+        Math.PI) /
+      180;
 
     const longitudeDifference =
-      ((point2.longitude - point1.longitude) * Math.PI) / 180;
+      ((point2.longitude - point1.longitude) *
+        Math.PI) /
+      180;
 
     const a =
       Math.sin(latitudeDifference / 2) *
@@ -52,11 +88,18 @@ export function useRunTracking() {
         Math.sin(longitudeDifference / 2);
 
     const c =
-      2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      2 *
+      Math.atan2(
+        Math.sqrt(a),
+        Math.sqrt(1 - a)
+      );
 
     return earthRadius * c;
   };
 
+  /*
+   * Start a completely new run.
+   */
   const startTracking = async () => {
     try {
       const { status } =
@@ -66,15 +109,131 @@ export function useRunTracking() {
         throw new Error("Location permission denied");
       }
 
-      // Reset previous run data
+      // Reset previous run data.
       setLocationPoints([]);
       setCurrentLocation(null);
       setDistance(0);
       setElapsedTime(0);
+      setPace(null);
 
-      // Store exact start timestamp
+      // Reset pause information.
+      pausedElapsedTimeRef.current = 0;
+
+      // Start the timer.
       startTimeRef.current = Date.now();
 
+      setIsPaused(false);
+      setIsTracking(true);
+
+      locationSubscription.current =
+        await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 2000,
+            distanceInterval: 5,
+          },
+          (location) => {
+            const point: LocationPoint = {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+              accuracy: location.coords.accuracy,
+              timestamp: location.timestamp,
+            };
+
+            setCurrentLocation(point);
+
+            setLocationPoints((previousPoints) => {
+              // First GPS point.
+              if (previousPoints.length === 0) {
+                return [point];
+              }
+
+              // Previous GPS point.
+              const previousPoint =
+                previousPoints[
+                  previousPoints.length - 1
+                ];
+
+              // Calculate distance between
+              // previous point and current point.
+              const segmentDistance =
+                calculateDistance(
+                  previousPoint,
+                  point
+                );
+
+              // Add the new segment distance
+              // to the total distance.
+              setDistance(
+                (previousDistance) =>
+                  previousDistance +
+                  segmentDistance
+              );
+
+              return [...previousPoints, point];
+            });
+          }
+        );
+    } catch (error) {
+      console.error(
+        "Unable to start tracking:",
+        error
+      );
+
+      setIsTracking(false);
+      setIsPaused(false);
+      startTimeRef.current = null;
+    }
+  };
+
+  /*
+   * Pause the current run.
+   */
+  const pauseTracking = () => {
+    // Stop receiving GPS updates.
+    locationSubscription.current?.remove();
+    locationSubscription.current = null;
+
+    // Remember how much running time has passed.
+    pausedElapsedTimeRef.current = elapsedTime;
+
+    setIsTracking(false);
+    setIsPaused(true);
+  };
+
+  /*
+   * Resume the paused run.
+   */
+  const resumeTracking = async () => {
+    try {
+      const { status } =
+        await Location.requestForegroundPermissionsAsync();
+
+      if (status !== "granted") {
+        throw new Error("Location permission denied");
+      }
+
+      /*
+       * Adjust the start time so that the timer
+       * continues from the previous elapsed time.
+       *
+       * Example:
+       *
+       * Previous elapsed time = 60 seconds
+       *
+       * Current time = 12:10:00
+       *
+       * New start time = 12:09:00
+       *
+       * Therefore:
+       *
+       * 12:10:01 - 12:09:00 = 61 seconds
+       */
+      startTimeRef.current =
+        Date.now() -
+        pausedElapsedTimeRef.current * 1000;
+
+      setIsPaused(false);
       setIsTracking(true);
 
       locationSubscription.current =
@@ -100,7 +259,9 @@ export function useRunTracking() {
               }
 
               const previousPoint =
-                previousPoints[previousPoints.length - 1];
+                previousPoints[
+                  previousPoints.length - 1
+                ];
 
               const segmentDistance =
                 calculateDistance(
@@ -110,7 +271,8 @@ export function useRunTracking() {
 
               setDistance(
                 (previousDistance) =>
-                  previousDistance + segmentDistance
+                  previousDistance +
+                  segmentDistance
               );
 
               return [...previousPoints, point];
@@ -119,24 +281,38 @@ export function useRunTracking() {
         );
     } catch (error) {
       console.error(
-        "Unable to start tracking:",
+        "Unable to resume tracking:",
         error
       );
 
       setIsTracking(false);
-      startTimeRef.current = null;
     }
   };
 
+  /*
+   * Completely stop the run.
+   */
   const stopTracking = () => {
     locationSubscription.current?.remove();
-
     locationSubscription.current = null;
 
     setIsTracking(false);
+    setIsPaused(false);
   };
 
-  // TIMER
+  /*
+   * Timer.
+   *
+   * Runs only while isTracking === true.
+   *
+   * When paused:
+   * isTracking = false
+   * → interval is cleared.
+   *
+   * When resumed:
+   * isTracking = true
+   * → interval starts again.
+   */
   useEffect(() => {
     if (!isTracking) {
       return;
@@ -151,7 +327,9 @@ export function useRunTracking() {
         Date.now() - startTimeRef.current;
 
       const elapsedSeconds =
-        Math.floor(elapsedMilliseconds / 1000);
+        Math.floor(
+          elapsedMilliseconds / 1000
+        );
 
       setElapsedTime(elapsedSeconds);
     }, 1000);
@@ -161,7 +339,10 @@ export function useRunTracking() {
     };
   }, [isTracking]);
 
-  // Cleanup GPS when screen/hook is destroyed
+  /*
+   * Cleanup GPS subscription when
+   * the component is destroyed.
+   */
   useEffect(() => {
     return () => {
       locationSubscription.current?.remove();
@@ -170,11 +351,18 @@ export function useRunTracking() {
 
   return {
     isTracking,
+    isPaused,
+
     locationPoints,
     currentLocation,
+
     distance,
     elapsedTime,
+    pace,
+
     startTracking,
+    pauseTracking,
+    resumeTracking,
     stopTracking,
   };
 }
