@@ -1,185 +1,486 @@
 import { router, useLocalSearchParams } from "expo-router";
+import MapView, {
+  Marker,
+  Polyline,
+  PROVIDER_GOOGLE,
+} from "react-native-maps";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { saveRun } from "../utils/runStorage";
+
+type RoutePoint = {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  timestamp: number;
+};
 
 export default function RunSummaryScreen() {
-  const { distance, elapsedTime, pace, points } = useLocalSearchParams<{
+  const {
+    distance,
+    elapsedTime,
+    pace,
+    points,
+    route,
+  } = useLocalSearchParams<{
     distance: string;
     elapsedTime: string;
     pace: string;
     points: string;
+    route: string;
   }>();
 
-  /*
-   * Convert seconds into HH:MM:SS
-   */
-  const formatTime = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3600);
+  // -----------------------------
+  // RUN DATA
+  // -----------------------------
 
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const distanceInMeters = Number(distance) || 0;
+  const totalElapsedTime = Number(elapsedTime) || 0;
+  const totalPace = Number(pace) || 0;
+  const totalPoints = Number(points) || 0;
 
-    const seconds = totalSeconds % 60;
+  // -----------------------------
+  // ROUTE DATA
+  // -----------------------------
 
-    return `${hours.toString().padStart(2, "0")}:${minutes
-      .toString()
-      .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  let routePoints: RoutePoint[] = [];
+
+  try {
+    if (route) {
+      routePoints = JSON.parse(route);
+    }
+  } catch (error) {
+    console.log("Route parsing error:", error);
+  }
+
+  // -----------------------------
+  // MAP COORDINATES
+  // -----------------------------
+
+  const coordinates = routePoints.map((point) => ({
+    latitude: point.latitude,
+    longitude: point.longitude,
+  }));
+
+  // -----------------------------
+  // TIME FORMAT
+  // -----------------------------
+
+  const formatTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+
+    const minutes = Math.floor(
+      (seconds % 3600) / 60
+    );
+
+    const secs = seconds % 60;
+
+    return `${String(hours).padStart(2, "0")}:${String(
+      minutes
+    ).padStart(2, "0")}:${String(secs).padStart(
+      2,
+      "0"
+    )}`;
   };
 
-  /*
-   * Convert pace seconds into MM:SS
-   */
+  // -----------------------------
+  // PACE FORMAT
+  // -----------------------------
+
   const formatPace = (paceSeconds: number) => {
-    if (!Number.isFinite(paceSeconds) || paceSeconds <= 0) {
+    if (!paceSeconds || paceSeconds <= 0) {
       return "--:--";
     }
 
     const minutes = Math.floor(paceSeconds / 60);
 
-    const seconds = Math.floor(paceSeconds % 60);
+    const seconds = Math.floor(
+      paceSeconds % 60
+    );
 
-    return `${minutes.toString().padStart(2, "0")}:${seconds
-      .toString()
-      .padStart(2, "0")}`;
+    return `${minutes}:${String(seconds).padStart(
+      2,
+      "0"
+    )}`;
   };
 
-  const distanceInKilometers = Number(distance || 0) / 1000;
+  // -----------------------------
+  // SAVE RUN
+  // -----------------------------
 
-  const totalElapsedTime = Number(elapsedTime || 0);
+  const handleSaveRun = async () => {
+    const newRun = {
+      id: Date.now().toString(),
 
-  const totalPace = Number(pace || 0);
+      distance: distanceInMeters,
 
-  const totalPoints = Number(points || 0);
+      elapsedTime: totalElapsedTime,
+
+      pace: totalPace > 0 ? totalPace : null,
+
+      points: totalPoints,
+
+      date: new Date().toISOString(),
+
+      route: routePoints,
+    };
+
+    await saveRun(newRun);
+
+    router.replace("/home");
+  };
+
+  // -----------------------------
+  // DISCARD
+  // -----------------------------
+
+  const handleDiscard = () => {
+    router.replace("/home");
+  };
 
   return (
     <View style={styles.container}>
       {/* HEADER */}
-      <Text style={styles.title}>Run Complete 🎉</Text>
 
-      <Text style={styles.subtitle}>Great job! Here's your run.</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>
+          Run Completed! 🎉
+        </Text>
 
-      {/* MAIN DISTANCE */}
-      <View style={styles.mainStat}>
-        <Text style={styles.distance}>{distanceInKilometers.toFixed(2)}</Text>
-
-        <Text style={styles.km}>KM</Text>
+        <Text style={styles.subtitle}>
+          Great job! Here's your run.
+        </Text>
       </View>
 
-      {/* STATS */}
+      {/* ROUTE MAP */}
 
-      <View style={styles.statsContainer}>
-        {/* TIME */}
-        <View style={styles.statCard}>
-          <Text style={styles.label}>TIME</Text>
+      <View style={styles.mapContainer}>
+        {coordinates.length >= 2 ? (
+          <MapView
+            provider={PROVIDER_GOOGLE}
+            style={styles.map}
+            showsUserLocation={false}
+            showsMyLocationButton={false}
+            showsCompass={false}
+            initialRegion={{
+              latitude: coordinates[0].latitude,
+              longitude: coordinates[0].longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }}
+          >
+            {/* RUNNING ROUTE */}
 
-          <Text style={styles.value}>{formatTime(totalElapsedTime)}</Text>
+            <Polyline
+              coordinates={coordinates}
+              strokeWidth={5}
+              strokeColor="#20C96B"
+            />
+
+            {/* START */}
+
+            <Marker
+              coordinate={coordinates[0]}
+              title="Start"
+            />
+
+            {/* FINISH */}
+
+            <Marker
+              coordinate={
+                coordinates[coordinates.length - 1]
+              }
+              title="Finish"
+            />
+          </MapView>
+        ) : (
+          <View style={styles.noMap}>
+            <Text style={styles.noMapText}>
+              Not enough GPS data for route
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* DISTANCE */}
+
+      <View style={styles.distanceSection}>
+        <Text style={styles.distanceLabel}>
+          DISTANCE
+        </Text>
+
+        <View style={styles.distanceRow}>
+          <Text style={styles.distance}>
+            {(distanceInMeters / 1000).toFixed(2)}
+          </Text>
+
+          <Text style={styles.km}>
+            KM
+          </Text>
         </View>
+      </View>
+
+      {/* TIME + PACE */}
+
+      <View style={styles.statsCard}>
+        {/* TIME */}
+
+        <View style={styles.stat}>
+          <Text style={styles.statLabel}>
+            TIME
+          </Text>
+
+          <Text style={styles.statValue}>
+            {formatTime(totalElapsedTime)}
+          </Text>
+        </View>
+
+        <View style={styles.divider} />
 
         {/* PACE */}
-        <View style={styles.statCard}>
-          <Text style={styles.label}>PACE</Text>
 
-          <Text style={styles.value}>{formatPace(totalPace)}</Text>
+        <View style={styles.stat}>
+          <Text style={styles.statLabel}>
+            AVG PACE
+          </Text>
 
-          <Text style={styles.unit}>/km</Text>
-        </View>
+          <Text style={styles.statValue}>
+            {formatPace(totalPace)}
+          </Text>
 
-        {/* GPS POINTS */}
-        <View style={styles.statCard}>
-          <Text style={styles.label}>GPS POINTS</Text>
-
-          <Text style={styles.value}>{totalPoints}</Text>
+          <Text style={styles.unit}>
+            /km
+          </Text>
         </View>
       </View>
 
-      {/* DONE */}
-      <Pressable
-        style={styles.doneButton}
-        onPress={() => router.replace("/home")}
-      >
-        <Text style={styles.buttonText}>DONE</Text>
-      </Pressable>
+      {/* GPS INFO */}
+
+      <View style={styles.routeInfo}>
+        <Text style={styles.routeInfoTitle}>
+          GPS ROUTE
+        </Text>
+
+        <Text style={styles.routeInfoText}>
+          {routePoints.length} GPS points captured
+        </Text>
+      </View>
+
+      {/* BUTTONS */}
+
+      <View style={styles.buttons}>
+        <Pressable
+          style={styles.saveButton}
+          onPress={handleSaveRun}
+        >
+          <Text style={styles.saveButtonText}>
+            SAVE RUN
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.discardButton}
+          onPress={handleDiscard}
+        >
+          <Text style={styles.discardButtonText}>
+            DISCARD
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
+// ======================================
+// STYLES
+// ======================================
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
-    padding: 24,
-    justifyContent: "center",
+    backgroundColor: "#F7F9F8",
+    paddingHorizontal: 16,
+    paddingTop: 50,
+  },
+
+  // HEADER
+
+  header: {
+    alignItems: "center",
+    marginBottom: 12,
   },
 
   title: {
-    fontSize: 30,
+    fontSize: 25,
     fontWeight: "800",
-    textAlign: "center",
-    marginBottom: 8,
+    color: "#111",
   },
 
   subtitle: {
-    textAlign: "center",
-    color: "#777777",
-    fontSize: 16,
-    marginBottom: 40,
+    fontSize: 13,
+    color: "#777",
+    marginTop: 4,
   },
 
-  mainStat: {
+  // MAP
+
+  mapContainer: {
+    height: 270,
+    borderRadius: 20,
+    overflow: "hidden",
+    backgroundColor: "#E5E5E5",
+    marginBottom: 14,
+  },
+
+  map: {
+    flex: 1,
+  },
+
+  noMap: {
+    flex: 1,
     alignItems: "center",
-    marginBottom: 40,
+    justifyContent: "center",
+  },
+
+  noMapText: {
+    color: "#777",
+    fontSize: 14,
+  },
+
+  // DISTANCE
+
+  distanceSection: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    alignItems: "center",
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+
+  distanceLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#888",
+    letterSpacing: 1,
+  },
+
+  distanceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
   },
 
   distance: {
-    fontSize: 72,
+    fontSize: 40,
     fontWeight: "800",
+    color: "#20C96B",
   },
 
   km: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#666666",
-    marginTop: -8,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#777",
+    marginLeft: 5,
   },
 
-  statsContainer: {
-    gap: 12,
-    marginBottom: 40,
+  // STATS
+
+  statsCard: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 15,
+    marginBottom: 10,
   },
 
-  statCard: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 16,
-    padding: 18,
+  stat: {
+    flex: 1,
     alignItems: "center",
   },
 
-  label: {
-    fontSize: 12,
+  statLabel: {
+    fontSize: 10,
+    color: "#888",
     fontWeight: "700",
-    color: "#777777",
-    marginBottom: 6,
+    marginBottom: 4,
   },
 
-  value: {
-    fontSize: 28,
-    fontWeight: "700",
+  statValue: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#111",
   },
 
   unit: {
-    color: "#777777",
-    marginTop: 2,
+    fontSize: 10,
+    color: "#777",
   },
 
-  doneButton: {
+  divider: {
+    width: 1,
+    height: 35,
+    backgroundColor: "#DDD",
+  },
+
+  // GPS
+
+  routeInfo: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+  },
+
+  routeInfoTitle: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#888",
+  },
+
+  routeInfoText: {
+    fontSize: 13,
+    color: "#333",
+    marginTop: 3,
+  },
+
+  // BUTTONS
+
+  buttons: {
+    gap: 8,
+  },
+
+  saveButton: {
+    height: 52,
+    borderRadius: 15,
     backgroundColor: "#20C96B",
-    paddingVertical: 16,
-    borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
   },
 
-  buttonText: {
-    color: "#FFFFFF",
+  saveButtonText: {
+    color: "#fff",
     fontSize: 16,
+    fontWeight: "800",
+  },
+
+  discardButton: {
+    height: 42,
+    borderRadius: 15,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E53935",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  discardButtonText: {
+    color: "#E53935",
+    fontSize: 14,
     fontWeight: "700",
   },
 });

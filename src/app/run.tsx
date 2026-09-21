@@ -1,7 +1,16 @@
 import { router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import MapView, {
+  Marker,
+  Polyline,
+  PROVIDER_GOOGLE,
+} from "react-native-maps";
 
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { useRunTracking } from "../hooks/useRunTracking";
 
@@ -12,332 +21,445 @@ export default function RunScreen() {
     currentLocation,
     locationPoints,
     distance,
-    pace,
     elapsedTime,
+    pace,
+
     startTracking,
     pauseTracking,
     resumeTracking,
     stopTracking,
   } = useRunTracking();
 
-  const distanceInKilometers = distance / 1000;
+  // --------------------------------
+  // TIME FORMAT
+  // --------------------------------
 
-  const mapRegion = currentLocation
-    ? {
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      }
-    : undefined;
+  const formatTime = (seconds: number) => {
+    const hours = Math.floor(
+      seconds / 3600
+    );
 
-  /*
-   * Convert seconds into HH:MM:SS
-   */
-  const formatTime = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor(
+      (seconds % 3600) / 60
+    );
 
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const secs = seconds % 60;
 
-    const seconds = totalSeconds % 60;
-
-    return `${hours.toString().padStart(2, "0")}:${minutes
-      .toString()
-      .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+    return `${String(hours).padStart(
+      2,
+      "0"
+    )}:${String(minutes).padStart(
+      2,
+      "0"
+    )}:${String(secs).padStart(
+      2,
+      "0"
+    )}`;
   };
 
-  /*
-   * Convert seconds/km into MM:SS
-   */
-  const formatPace = (paceSeconds: number | null) => {
-    if (paceSeconds === null || !Number.isFinite(paceSeconds)) {
+  // --------------------------------
+  // PACE FORMAT
+  // --------------------------------
+
+  const formatPace = (
+    paceSeconds: number | null
+  ) => {
+    if (
+      !paceSeconds ||
+      paceSeconds <= 0
+    ) {
       return "--:--";
     }
 
-    const minutes = Math.floor(paceSeconds / 60);
+    const minutes = Math.floor(
+      paceSeconds / 60
+    );
 
-    const seconds = Math.floor(paceSeconds % 60);
+    const seconds = Math.floor(
+      paceSeconds % 60
+    );
 
-    return `${minutes.toString().padStart(2, "0")}:${seconds
-      .toString()
-      .padStart(2, "0")}`;
+    return `${minutes}:${String(
+      seconds
+    ).padStart(2, "0")}`;
   };
 
-  /*
-   * Stop the run and send
-   * the data to Run Summary.
-   */
+  // --------------------------------
+  // STOP RUN
+  // --------------------------------
+
   const handleStopRun = () => {
+    // Capture all run information
+    // before stopping tracking.
+
+    const runData = {
+      distance: String(distance),
+
+      elapsedTime: String(
+        elapsedTime
+      ),
+
+      pace: String(pace ?? 0),
+
+      points: String(
+        locationPoints.length
+      ),
+
+      // Save the complete GPS route
+      route: JSON.stringify(
+        locationPoints
+      ),
+    };
+
+    // Stop GPS tracking
     stopTracking();
 
+    // Go to Run Summary
     router.replace({
       pathname: "/run-summary",
-
-      params: {
-        distance: distance.toString(),
-
-        elapsedTime: elapsedTime.toString(),
-
-        pace: pace?.toString() ?? "0",
-
-        points: locationPoints.length.toString(),
-      },
+      params: runData,
     });
   };
 
+  // --------------------------------
+  // MAP REGION
+  // --------------------------------
+
+  const mapRegion = currentLocation
+    ? {
+        latitude:
+          currentLocation.latitude,
+
+        longitude:
+          currentLocation.longitude,
+
+        latitudeDelta: 0.005,
+
+        longitudeDelta: 0.005,
+      }
+    : {
+        latitude: 13.056873,
+
+        longitude: 77.589567,
+
+        latitudeDelta: 0.01,
+
+        longitudeDelta: 0.01,
+      };
+
   return (
     <View style={styles.container}>
-      {/* STATUS */}
-      <Text style={styles.title}>
-        {isPaused ? "PAUSED ⏸️" : isTracking ? "RUNNING 🟢" : "READY"}
-      </Text>
 
-      {/* DISTANCE */}
-      <View style={styles.distanceContainer}>
-        <Text style={styles.distance}>{distanceInKilometers.toFixed(2)}</Text>
+      {/* HEADER */}
 
-        <Text style={styles.km}>KM</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>
+          {isPaused
+            ? "PAUSED"
+            : isTracking
+            ? "RUNNING 🟢"
+            : "READY"}
+        </Text>
+
+        <Text style={styles.subtitle}>
+          {currentLocation
+            ? `GPS Accuracy: ${
+                currentLocation.accuracy?.toFixed(
+                  1
+                ) ?? "--"
+              } m`
+            : "Waiting for GPS..."}
+        </Text>
       </View>
 
-      {/* TIME */}
-      <View style={styles.timerContainer}>
-        <Text style={styles.timerLabel}>TIME</Text>
+      {/* STATS */}
 
-        <Text style={styles.timer}>{formatTime(elapsedTime)}</Text>
-      </View>
+      <View style={styles.statsContainer}>
 
-      {/* PACE */}
-      <View style={styles.paceContainer}>
-        <Text style={styles.paceLabel}>PACE</Text>
+        <View style={styles.stat}>
+          <Text style={styles.statValue}>
+            {(distance / 1000).toFixed(
+              2
+            )}
+          </Text>
 
-        <Text style={styles.pace}>{formatPace(pace)} /km</Text>
+          <Text style={styles.statLabel}>
+            KM
+          </Text>
+        </View>
+
+        <View style={styles.stat}>
+          <Text style={styles.statValue}>
+            {formatTime(elapsedTime)}
+          </Text>
+
+          <Text style={styles.statLabel}>
+            TIME
+          </Text>
+        </View>
+
+        <View style={styles.stat}>
+          <Text style={styles.statValue}>
+            {formatPace(pace)}
+          </Text>
+
+          <Text style={styles.statLabel}>
+            /KM
+          </Text>
+        </View>
+
       </View>
 
       {/* MAP */}
-      {currentLocation && (
-        <View style={styles.mapContainer}>
-          <MapView
-            provider={PROVIDER_GOOGLE}
-            style={styles.map}
-            region={mapRegion}
-            showsUserLocation={true}
-            showsMyLocationButton={true}
-          >
-            {/* ROUTE */}
-            {locationPoints.length > 1 && (
-              <Polyline
-                coordinates={locationPoints.map((point) => ({
-                  latitude: point.latitude,
-                  longitude: point.longitude,
-                }))}
-                strokeWidth={5}
-              />
-            )}
 
-            {/* CURRENT POSITION */}
+      <View style={styles.mapContainer}>
+
+        <MapView
+          provider={PROVIDER_GOOGLE}
+          style={styles.map}
+          region={mapRegion}
+          showsUserLocation
+          showsMyLocationButton
+        >
+
+          {/* ROUTE */}
+
+          {locationPoints.length > 0 && (
+            <>
+              <Polyline
+                coordinates={locationPoints.map(
+                  (point) => ({
+                    latitude:
+                      point.latitude,
+
+                    longitude:
+                      point.longitude,
+                  })
+                )}
+                strokeWidth={5}
+                strokeColor="#20C96B"
+              />
+
+              {/* START MARKER */}
+
+              <Marker
+                coordinate={{
+                  latitude:
+                    locationPoints[0]
+                      .latitude,
+
+                  longitude:
+                    locationPoints[0]
+                      .longitude,
+                }}
+                title="Start"
+              />
+            </>
+          )}
+
+          {/* CURRENT LOCATION */}
+
+          {currentLocation && (
             <Marker
               coordinate={{
-                latitude: currentLocation.latitude,
+                latitude:
+                  currentLocation.latitude,
 
-                longitude: currentLocation.longitude,
+                longitude:
+                  currentLocation.longitude,
               }}
               title="You"
             />
-          </MapView>
-        </View>
-      )}
+          )}
 
-      {/* GPS POINTS */}
-      <Text style={styles.points}>GPS Points: {locationPoints.length}</Text>
+        </MapView>
 
-      {/* GPS DETAILS */}
-      {currentLocation && (
-        <View style={styles.locationCard}>
-          <Text style={styles.locationTitle}>Current GPS</Text>
-
-          <Text style={styles.locationText}>
-            Latitude: {currentLocation.latitude.toFixed(6)}
-          </Text>
-
-          <Text style={styles.locationText}>
-            Longitude: {currentLocation.longitude.toFixed(6)}
-          </Text>
-
-          <Text style={styles.locationText}>
-            Accuracy:{" "}
-            {currentLocation.accuracy !== null
-              ? `${currentLocation.accuracy.toFixed(1)} m`
-              : "--"}
-          </Text>
-        </View>
-      )}
+      </View>
 
       {/* BUTTONS */}
 
-      {isPaused ? (
-        <>
-          {/* RESUME */}
-          <Pressable style={styles.startButton} onPress={resumeTracking}>
-            <Text style={styles.buttonText}>RESUME RUN</Text>
-          </Pressable>
+      <View style={styles.controls}>
 
-          {/* STOP */}
-          <Pressable style={styles.stopButton} onPress={handleStopRun}>
-            <Text style={styles.buttonText}>STOP RUN</Text>
-          </Pressable>
-        </>
-      ) : isTracking ? (
-        <>
-          {/* PAUSE */}
-          <Pressable style={styles.pauseButton} onPress={pauseTracking}>
-            <Text style={styles.buttonText}>PAUSE RUN</Text>
-          </Pressable>
+        {/* START */}
 
-          {/* STOP */}
-          <Pressable style={styles.stopButton} onPress={handleStopRun}>
-            <Text style={styles.buttonText}>STOP RUN</Text>
-          </Pressable>
-        </>
-      ) : (
-        /* START */
-        <Pressable style={styles.startButton} onPress={startTracking}>
-          <Text style={styles.buttonText}>START TRACKING</Text>
-        </Pressable>
-      )}
+        {!isTracking &&
+          !isPaused && (
+            <Pressable
+              style={styles.startButton}
+              onPress={startTracking}
+            >
+              <Text
+                style={styles.buttonText}
+              >
+                START TRACKING
+              </Text>
+            </Pressable>
+          )}
+
+        {/* RUNNING */}
+
+        {isTracking && (
+          <>
+            <Pressable
+              style={styles.pauseButton}
+              onPress={pauseTracking}
+            >
+              <Text
+                style={styles.buttonText}
+              >
+                PAUSE RUN
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.stopButton}
+              onPress={handleStopRun}
+            >
+              <Text
+                style={styles.buttonText}
+              >
+                STOP RUN
+              </Text>
+            </Pressable>
+          </>
+        )}
+
+        {/* PAUSED */}
+
+        {isPaused && (
+          <>
+            <Pressable
+              style={styles.resumeButton}
+              onPress={resumeTracking}
+            >
+              <Text
+                style={styles.buttonText}
+              >
+                RESUME RUN
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.stopButton}
+              onPress={handleStopRun}
+            >
+              <Text
+                style={styles.buttonText}
+              >
+                STOP RUN
+              </Text>
+            </Pressable>
+          </>
+        )}
+
+      </View>
     </View>
   );
 }
 
+// ======================================
+// STYLES
+// ======================================
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
-    padding: 24,
-    justifyContent: "center",
+    backgroundColor: "#F7F9F8",
+  },
+
+  header: {
+    paddingTop: 55,
+    paddingHorizontal: 20,
+    paddingBottom: 15,
   },
 
   title: {
-    textAlign: "center",
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 30,
-  },
-
-  distanceContainer: {
-    alignItems: "center",
-    marginBottom: 25,
-  },
-
-  distance: {
-    fontSize: 64,
+    fontSize: 26,
     fontWeight: "800",
+    color: "#111",
   },
 
-  km: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#666666",
-    marginTop: -8,
+  subtitle: {
+    marginTop: 5,
+    color: "#777",
   },
 
-  timerContainer: {
+  statsContainer: {
+    backgroundColor: "#fff",
+    marginHorizontal: 15,
+    borderRadius: 18,
+    paddingVertical: 20,
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+
+  stat: {
     alignItems: "center",
-    marginBottom: 20,
+    flex: 1,
   },
 
-  timerLabel: {
-    fontSize: 14,
-    color: "#777777",
-    fontWeight: "600",
-    marginBottom: 4,
+  statValue: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#111",
   },
 
-  timer: {
-    fontSize: 36,
-    fontWeight: "700",
-  },
-
-  paceContainer: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
-
-  paceLabel: {
-    fontSize: 14,
-    color: "#777777",
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-
-  pace: {
-    fontSize: 28,
-    fontWeight: "700",
+  statLabel: {
+    fontSize: 11,
+    color: "#777",
+    marginTop: 5,
   },
 
   mapContainer: {
-    height: 300,
-    borderRadius: 16,
+    flex: 1,
+    marginTop: 15,
     overflow: "hidden",
-    marginBottom: 20,
   },
 
   map: {
-    width: "100%",
-    height: "100%",
+    flex: 1,
   },
 
-  points: {
-    textAlign: "center",
-    color: "#666666",
-    marginBottom: 20,
-  },
-
-  locationCard: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 25,
-  },
-
-  locationTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
-
-  locationText: {
-    fontSize: 14,
-    color: "#444444",
-    marginBottom: 4,
+  controls: {
+    padding: 20,
+    gap: 12,
   },
 
   startButton: {
+    height: 55,
     backgroundColor: "#20C96B",
-    paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 15,
     alignItems: "center",
-    marginBottom: 12,
+    justifyContent: "center",
   },
 
   pauseButton: {
+    height: 55,
     backgroundColor: "#F59E0B",
-    paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 15,
     alignItems: "center",
-    marginBottom: 12,
+    justifyContent: "center",
+  },
+
+  resumeButton: {
+    height: 55,
+    backgroundColor: "#20C96B",
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   stopButton: {
+    height: 55,
     backgroundColor: "#E53935",
-    paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 15,
     alignItems: "center",
-    marginBottom: 12,
+    justifyContent: "center",
   },
 
   buttonText: {
-    color: "#FFFFFF",
+    color: "#fff",
+    fontWeight: "800",
     fontSize: 16,
-    fontWeight: "700",
   },
 });

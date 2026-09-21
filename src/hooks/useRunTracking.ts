@@ -9,60 +9,42 @@ export type LocationPoint = {
 };
 
 export function useRunTracking() {
-  const [isTracking, setIsTracking] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isTracking, setIsTracking] =
+    useState(false);
 
-  const [locationPoints, setLocationPoints] = useState<
-    LocationPoint[]
-  >([]);
+  const [isPaused, setIsPaused] =
+    useState(false);
+
+  const [locationPoints, setLocationPoints] =
+    useState<LocationPoint[]>([]);
 
   const [currentLocation, setCurrentLocation] =
     useState<LocationPoint | null>(null);
 
-  const [distance, setDistance] = useState(0);
+  const [distance, setDistance] =
+    useState(0);
 
-  const [elapsedTime, setElapsedTime] = useState(0);
+  const [elapsedTime, setElapsedTime] =
+    useState(0);
 
-  const [pace, setPace] = useState<number | null>(null);
+  const [pace, setPace] =
+    useState<number | null>(null);
 
   const locationSubscription =
-    useRef<Location.LocationSubscription | null>(null);
+    useRef<Location.LocationSubscription | null>(
+      null
+    );
 
-  const startTimeRef = useRef<number | null>(null);
+  const startTimeRef =
+    useRef<number | null>(null);
 
-  const pausedElapsedTimeRef = useRef(0);
+  const pausedElapsedTimeRef =
+    useRef(0);
 
-  /*
-   * Calculate pace.
-   *
-   * Pace = elapsed time / distance
-   *
-   * Example:
-   * 1800 seconds / 5 km
-   * = 360 seconds/km
-   * = 6:00/km
-   */
-  useEffect(() => {
-    if (distance <= 0 || elapsedTime <= 0) {
-      setPace(null);
-      return;
-    }
+  // --------------------------------
+  // CALCULATE DISTANCE
+  // --------------------------------
 
-    const distanceInKilometers =
-      distance / 1000;
-
-    const paceSecondsPerKm =
-      elapsedTime / distanceInKilometers;
-
-    setPace(paceSecondsPerKm);
-  }, [distance, elapsedTime]);
-
-  /*
-   * Haversine Formula
-   *
-   * Calculates the distance between
-   * two GPS coordinates.
-   */
   const calculateDistance = (
     point1: LocationPoint,
     point2: LocationPoint
@@ -76,22 +58,28 @@ export function useRunTracking() {
       (point2.latitude * Math.PI) / 180;
 
     const latitudeDifference =
-      ((point2.latitude - point1.latitude) *
+      ((point2.latitude -
+        point1.latitude) *
         Math.PI) /
       180;
 
     const longitudeDifference =
-      ((point2.longitude - point1.longitude) *
+      ((point2.longitude -
+        point1.longitude) *
         Math.PI) /
       180;
 
     const a =
-      Math.sin(latitudeDifference / 2) *
-        Math.sin(latitudeDifference / 2) +
+      Math.sin(
+        latitudeDifference / 2
+      ) **
+        2 +
       Math.cos(latitude1) *
         Math.cos(latitude2) *
-        Math.sin(longitudeDifference / 2) *
-        Math.sin(longitudeDifference / 2);
+        Math.sin(
+          longitudeDifference / 2
+        ) **
+          2;
 
     const c =
       2 *
@@ -103,9 +91,89 @@ export function useRunTracking() {
     return earthRadius * c;
   };
 
-  /*
-   * Start a NEW run.
-   */
+  // --------------------------------
+  // UPDATE PACE
+  // --------------------------------
+
+  useEffect(() => {
+    if (
+      distance <= 0 ||
+      elapsedTime <= 0
+    ) {
+      setPace(null);
+      return;
+    }
+
+    const distanceInKilometers =
+      distance / 1000;
+
+    const paceSecondsPerKm =
+      elapsedTime /
+      distanceInKilometers;
+
+    setPace(paceSecondsPerKm);
+  }, [distance, elapsedTime]);
+
+  // --------------------------------
+  // LOCATION CALLBACK
+  // --------------------------------
+
+  const handleLocationUpdate = (
+    location: Location.LocationObject
+  ) => {
+    const point: LocationPoint = {
+      latitude:
+        location.coords.latitude,
+
+      longitude:
+        location.coords.longitude,
+
+      accuracy:
+        location.coords.accuracy,
+
+      timestamp:
+        location.timestamp,
+    };
+
+    setCurrentLocation(point);
+
+    setLocationPoints(
+      (previousPoints) => {
+        if (
+          previousPoints.length === 0
+        ) {
+          return [point];
+        }
+
+        const previousPoint =
+          previousPoints[
+            previousPoints.length - 1
+          ];
+
+        const segmentDistance =
+          calculateDistance(
+            previousPoint,
+            point
+          );
+
+        setDistance(
+          (previousDistance) =>
+            previousDistance +
+            segmentDistance
+        );
+
+        return [
+          ...previousPoints,
+          point,
+        ];
+      }
+    );
+  };
+
+  // --------------------------------
+  // START TRACKING
+  // --------------------------------
+
   const startTracking = async () => {
     try {
       const { status } =
@@ -117,81 +185,38 @@ export function useRunTracking() {
         );
       }
 
-      // Reset previous run.
+      // Reset run data
+
       setLocationPoints([]);
+
       setCurrentLocation(null);
+
       setDistance(0);
+
       setElapsedTime(0);
+
       setPace(null);
 
-      // Reset pause data.
       pausedElapsedTimeRef.current = 0;
 
-      // Start timer.
-      startTimeRef.current = Date.now();
+      startTimeRef.current =
+        Date.now();
 
       setIsPaused(false);
+
       setIsTracking(true);
 
       locationSubscription.current =
         await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.High,
+            accuracy:
+              Location.Accuracy.High,
+
             timeInterval: 2000,
+
             distanceInterval: 5,
           },
-          (location) => {
-            const point: LocationPoint = {
-              latitude:
-                location.coords.latitude,
-              longitude:
-                location.coords.longitude,
-              accuracy:
-                location.coords.accuracy,
-              timestamp:
-                location.timestamp,
-            };
-
-            setCurrentLocation(point);
-
-            setLocationPoints(
-              (previousPoints) => {
-                // First GPS point.
-                if (
-                  previousPoints.length === 0
-                ) {
-                  return [point];
-                }
-
-                const previousPoint =
-                  previousPoints[
-                    previousPoints.length - 1
-                  ];
-
-                // Calculate distance between
-                // previous GPS point and
-                // current GPS point.
-                const segmentDistance =
-                  calculateDistance(
-                    previousPoint,
-                    point
-                  );
-
-                // Add segment distance
-                // to total distance.
-                setDistance(
-                  (previousDistance) =>
-                    previousDistance +
-                    segmentDistance
-                );
-
-                return [
-                  ...previousPoints,
-                  point,
-                ];
-              }
-            );
-          }
+          handleLocationUpdate
         );
     } catch (error) {
       console.error(
@@ -200,31 +225,35 @@ export function useRunTracking() {
       );
 
       setIsTracking(false);
+
       setIsPaused(false);
+
       startTimeRef.current = null;
     }
   };
 
-  /*
-   * Pause the current run.
-   */
+  // --------------------------------
+  // PAUSE
+  // --------------------------------
+
   const pauseTracking = () => {
-    // Stop GPS updates.
     locationSubscription.current?.remove();
 
-    locationSubscription.current = null;
+    locationSubscription.current =
+      null;
 
-    // Save current running time.
     pausedElapsedTimeRef.current =
       elapsedTime;
 
     setIsTracking(false);
+
     setIsPaused(true);
   };
 
-  /*
-   * Resume the paused run.
-   */
+  // --------------------------------
+  // RESUME
+  // --------------------------------
+
   const resumeTracking = async () => {
     try {
       const { status } =
@@ -236,70 +265,26 @@ export function useRunTracking() {
         );
       }
 
-      /*
-       * Adjust start time so paused time
-       * isn't included.
-       */
       startTimeRef.current =
         Date.now() -
-        pausedElapsedTimeRef.current * 1000;
+        pausedElapsedTimeRef.current *
+          1000;
 
       setIsPaused(false);
+
       setIsTracking(true);
 
       locationSubscription.current =
         await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.High,
+            accuracy:
+              Location.Accuracy.High,
+
             timeInterval: 2000,
+
             distanceInterval: 5,
           },
-          (location) => {
-            const point: LocationPoint = {
-              latitude:
-                location.coords.latitude,
-              longitude:
-                location.coords.longitude,
-              accuracy:
-                location.coords.accuracy,
-              timestamp:
-                location.timestamp,
-            };
-
-            setCurrentLocation(point);
-
-            setLocationPoints(
-              (previousPoints) => {
-                if (
-                  previousPoints.length === 0
-                ) {
-                  return [point];
-                }
-
-                const previousPoint =
-                  previousPoints[
-                    previousPoints.length - 1
-                  ];
-
-                const segmentDistance =
-                  calculateDistance(
-                    previousPoint,
-                    point
-                  );
-
-                setDistance(
-                  (previousDistance) =>
-                    previousDistance +
-                    segmentDistance
-                );
-
-                return [
-                  ...previousPoints,
-                  point,
-                ];
-              }
-            );
-          }
+          handleLocationUpdate
         );
     } catch (error) {
       console.error(
@@ -311,30 +296,42 @@ export function useRunTracking() {
     }
   };
 
-  /*
-   * Completely stop the run.
-   */
+  // --------------------------------
+  // STOP
+  // --------------------------------
+
   const stopTracking = () => {
+    // Remove GPS watcher
+
     locationSubscription.current?.remove();
 
-    locationSubscription.current = null;
+    locationSubscription.current =
+      null;
+
+    // Stop tracking state
 
     setIsTracking(false);
+
     setIsPaused(false);
+
+    // Stop timer
+
+    startTimeRef.current = null;
   };
 
-  /*
-   * Timer.
-   *
-   * Runs only while the run is active.
-   */
+  // --------------------------------
+  // TIMER
+  // --------------------------------
+
   useEffect(() => {
     if (!isTracking) {
       return;
     }
 
     const timer = setInterval(() => {
-      if (startTimeRef.current === null) {
+      if (
+        startTimeRef.current === null
+      ) {
         return;
       }
 
@@ -347,7 +344,9 @@ export function useRunTracking() {
           elapsedMilliseconds / 1000
         );
 
-      setElapsedTime(elapsedSeconds);
+      setElapsedTime(
+        elapsedSeconds
+      );
     }, 1000);
 
     return () => {
@@ -355,23 +354,25 @@ export function useRunTracking() {
     };
   }, [isTracking]);
 
-  /*
-   * Cleanup GPS subscription
-   * when component disappears.
-   */
+  // --------------------------------
+  // CLEANUP
+  // --------------------------------
+
   useEffect(() => {
     return () => {
       locationSubscription.current?.remove();
     };
   }, []);
 
+  // --------------------------------
+  // RETURN
+  // --------------------------------
+
   return {
     isTracking,
     isPaused,
-
     locationPoints,
     currentLocation,
-
     distance,
     elapsedTime,
     pace,
