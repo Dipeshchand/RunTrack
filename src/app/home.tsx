@@ -1,7 +1,6 @@
 import {
   router,
   useFocusEffect,
-  useLocalSearchParams,
 } from "expo-router";
 
 import {
@@ -22,36 +21,45 @@ import {
   SavedRun,
 } from "../utils/runStorage";
 
-export default function HomeScreen() {
-  const {
-    name,
-  } =
-    useLocalSearchParams<{
-      name?: string;
-    }>();
+import {
+  getProfile,
+  Profile,
+} from "../utils/profileStorage";
 
+export default function HomeScreen() {
   const [runs, setRuns] =
     useState<SavedRun[]>([]);
 
+  const [profile, setProfile] =
+    useState<Profile | null>(null);
+
   // ======================================
-  // LOAD RUNS
+  // LOAD RUNS + PROFILE
   // ======================================
 
   useFocusEffect(
     useCallback(() => {
-      const loadRuns =
-        async () => {
-          const savedRuns =
-            await getRuns();
+      const loadData = async () => {
+        const savedRuns = await getRuns();
+        const savedProfile = await getProfile();
 
-          setRuns(
-            savedRuns
-          );
-        };
+        setRuns(savedRuns);
+        setProfile(savedProfile);
+      };
 
-      loadRuns();
+      loadData();
     }, [])
   );
+
+  // ======================================
+  // PROFILE NAME
+  // ======================================
+
+  const profileName =
+    profile?.name?.trim() || "Runner";
+
+  const profileInitial =
+    profileName.charAt(0).toUpperCase();
 
   // ======================================
   // FORMAT TIME
@@ -61,46 +69,33 @@ export default function HomeScreen() {
     seconds: number
   ) => {
     const hours =
-      Math.floor(
-        seconds / 3600
-      );
+      Math.floor(seconds / 3600);
 
     const minutes =
       Math.floor(
-        (seconds % 3600) /
-          60
+        (seconds % 3600) / 60
       );
 
     const secs =
       seconds % 60;
 
     if (hours > 0) {
-      return `${String(
-        hours
-      ).padStart(
+      return `${String(hours).padStart(
         2,
         "0"
-      )}:${String(
-        minutes
-      ).padStart(
+      )}:${String(minutes).padStart(
         2,
         "0"
-      )}:${String(
-        secs
-      ).padStart(
+      )}:${String(secs).padStart(
         2,
         "0"
       )}`;
     }
 
-    return `${String(
-      minutes
-    ).padStart(
+    return `${String(minutes).padStart(
       2,
       "0"
-    )}:${String(
-      secs
-    ).padStart(
+    )}:${String(secs).padStart(
       2,
       "0"
     )}`;
@@ -113,29 +108,19 @@ export default function HomeScreen() {
   const formatPace = (
     pace: number | null
   ) => {
-    if (
-      !pace ||
-      pace <= 0
-    ) {
+    if (!pace || pace <= 0) {
       return "--:--";
     }
 
     const minutes =
-      Math.floor(
-        pace / 60
-      );
+      Math.floor(pace / 60);
 
     const seconds =
-      Math.floor(
-        pace % 60
-      );
+      Math.floor(pace % 60);
 
     return `${minutes}:${String(
       seconds
-    ).padStart(
-      2,
-      "0"
-    )}`;
+    ).padStart(2, "0")}`;
   };
 
   // ======================================
@@ -160,36 +145,31 @@ export default function HomeScreen() {
   // WEEK START
   // ======================================
 
-  const getStartOfWeek =
-    () => {
-      const now =
-        new Date();
+  const getStartOfWeek = () => {
+    const now = new Date();
 
-      const day =
-        now.getDay();
+    const day = now.getDay();
 
-      const diff =
-        day === 0
-          ? -6
-          : 1 - day;
+    const diff =
+      day === 0
+        ? -6
+        : 1 - day;
 
-      const start =
-        new Date(now);
+    const start = new Date(now);
 
-      start.setDate(
-        now.getDate() +
-          diff
-      );
+    start.setDate(
+      now.getDate() + diff
+    );
 
-      start.setHours(
-        0,
-        0,
-        0,
-        0
-      );
+    start.setHours(
+      0,
+      0,
+      0,
+      0
+    );
 
-      return start;
-    };
+    return start;
+  };
 
   const startOfWeek =
     getStartOfWeek();
@@ -197,198 +177,94 @@ export default function HomeScreen() {
   const weeklyRuns =
     runs.filter(
       (run) =>
-        new Date(
-          run.date
-        ) >= startOfWeek
+        new Date(run.date) >=
+        startOfWeek
     );
 
   const weeklyDistance =
     weeklyRuns.reduce(
-      (
-        total,
-        run
-      ) =>
-        total +
-        run.distance,
+      (total, run) =>
+        total + run.distance,
       0
     );
 
   const weeklyDistanceKm =
-    weeklyDistance /
-    1000;
+    weeklyDistance / 1000;
 
   const averagePace =
     weeklyRuns.length > 0
       ? weeklyRuns.reduce(
-          (
-            total,
-            run
-          ) =>
-            total +
-            (run.pace ??
-              0),
+          (total, run) =>
+            total + (run.pace ?? 0),
           0
-        ) /
-        weeklyRuns.length
+        ) / weeklyRuns.length
       : null;
 
   return (
-    <View
-      style={
-        styles.container
-      }
-    >
+    <View style={styles.container}>
       <ScrollView
-        showsVerticalScrollIndicator={
-          false
-        }
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={
           styles.scrollContent
         }
       >
-
         {/* HEADER */}
 
-        <View
-          style={
-            styles.header
-          }
-        >
+        <View style={styles.header}>
           <View>
-            <Text
-              style={
-                styles.smallText
-              }
-            >
+            <Text style={styles.smallText}>
               Good Morning
             </Text>
 
-            <Text
-              style={
-                styles.title
-              }
-            >
-              {name ||
-                "Runner"}{" "}
-              👋
+            <Text style={styles.title}>
+              {profileName} 👋
             </Text>
           </View>
 
-          <View
-            style={
-              styles.profileCircle
-            }
-          >
-            <Text
-              style={
-                styles.profileText
-              }
-            >
-              {(name ||
-                "R")
-                .charAt(
-                  0
-                )
-                .toUpperCase()}
+          <View style={styles.profileCircle}>
+            <Text style={styles.profileText}>
+              {profileInitial}
             </Text>
           </View>
         </View>
 
         {/* WEEKLY STATS */}
 
-        <Text
-          style={
-            styles.sectionTitle
-          }
-        >
+        <Text style={styles.sectionTitle}>
           This Week
         </Text>
 
-        <View
-          style={
-            styles.statsCard
-          }
-        >
-          <View
-            style={
-              styles.statItem
-            }
-          >
-            <Text
-              style={
-                styles.statValue
-              }
-            >
-              {weeklyDistanceKm.toFixed(
-                1
-              )}
+        <View style={styles.statsCard}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>
+              {weeklyDistanceKm.toFixed(1)}
             </Text>
 
-            <Text
-              style={
-                styles.statLabel
-              }
-            >
+            <Text style={styles.statLabel}>
               KM
             </Text>
           </View>
 
-          <View
-            style={
-              styles.divider
-            }
-          />
+          <View style={styles.divider} />
 
-          <View
-            style={
-              styles.statItem
-            }
-          >
-            <Text
-              style={
-                styles.statValue
-              }
-            >
-              {
-                weeklyRuns.length
-              }
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>
+              {weeklyRuns.length}
             </Text>
 
-            <Text
-              style={
-                styles.statLabel
-              }
-            >
+            <Text style={styles.statLabel}>
               Runs
             </Text>
           </View>
 
-          <View
-            style={
-              styles.divider
-            }
-          />
+          <View style={styles.divider} />
 
-          <View
-            style={
-              styles.statItem
-            }
-          >
-            <Text
-              style={
-                styles.statValue
-              }
-            >
-              {formatPace(
-                averagePace
-              )}
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>
+              {formatPace(averagePace)}
             </Text>
 
-            <Text
-              style={
-                styles.statLabel
-              }
-            >
+            <Text style={styles.statLabel}>
               Avg Pace
             </Text>
           </View>
@@ -397,285 +273,154 @@ export default function HomeScreen() {
         {/* START RUN */}
 
         <Pressable
-          style={
-            styles.startButton
-          }
+          style={styles.startButton}
           onPress={() =>
-            router.push(
-              "/pre-run"
-            )
+            router.push("/pre-run")
           }
         >
-          <Text
-            style={
-              styles.startButtonText
-            }
-          >
+          <Text style={styles.startButtonText}>
             START RUN
           </Text>
         </Pressable>
 
         {/* RECENT RUNS */}
 
-        <View
-          style={
-            styles.recentHeader
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
+        <View style={styles.recentHeader}>
+          <Text style={styles.sectionTitle}>
             Recent Runs
           </Text>
 
-          {runs.length >
-            0 && (
+          {runs.length > 0 && (
             <Pressable
               onPress={() =>
-                router.push(
-                  "/history"
-                )
+                router.push("/history")
               }
             >
-              <Text
-                style={
-                  styles.seeAll
-                }
-              >
+              <Text style={styles.seeAll}>
                 See All
               </Text>
             </Pressable>
           )}
         </View>
 
-        {runs.length ===
-        0 ? (
-          <View
-            style={
-              styles.emptyCard
-            }
-          >
-            <Text
-              style={
-                styles.emptyIcon
-              }
-            >
+        {runs.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyIcon}>
               🏃
             </Text>
 
-            <Text
-              style={
-                styles.emptyTitle
-              }
-            >
+            <Text style={styles.emptyTitle}>
               No runs yet
             </Text>
 
-            <Text
-              style={
-                styles.emptyText
-              }
-            >
-              Complete your
-              first run and
-              it will appear
-              here.
+            <Text style={styles.emptyText}>
+              Complete your first run and
+              it will appear here.
             </Text>
           </View>
         ) : (
           runs
             .slice(0, 3)
-            .map(
-              (run) => (
-                <Pressable
-                  key={
-                    run.id
-                  }
-                  style={
-                    styles.runCard
-                  }
-                  onPress={() =>
-                    router.push(
-                      {
-                        pathname:
-                          "/run-details",
-                        params: {
-                          id: run.id,
-                        },
-                      }
-                    )
-                  }
-                >
-                  <View>
-                    <Text
-                      style={
-                        styles.runDate
-                      }
-                    >
-                      {formatDate(
-                        run.date
-                      )}
-                    </Text>
+            .map((run) => (
+              <Pressable
+                key={run.id}
+                style={styles.runCard}
+                onPress={() =>
+                  router.push({
+                    pathname:
+                      "/run-details",
+                    params: {
+                      id: run.id,
+                    },
+                  })
+                }
+              >
+                <View>
+                  <Text style={styles.runDate}>
+                    {formatDate(run.date)}
+                  </Text>
 
-                    <Text
-                      style={
-                        styles.runDistance
-                      }
-                    >
-                      {(
-                        run.distance /
-                        1000
-                      ).toFixed(
-                        2
-                      )}{" "}
-                      km
-                    </Text>
-                  </View>
+                  <Text style={styles.runDistance}>
+                    {(run.distance / 1000).toFixed(
+                      2
+                    )}{" "}
+                    km
+                  </Text>
+                </View>
 
-                  <View
-                    style={
-                      styles.runRight
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.runTime
-                      }
-                    >
-                      {formatTime(
-                        run.elapsedTime
-                      )}
-                    </Text>
+                <View style={styles.runRight}>
+                  <Text style={styles.runTime}>
+                    {formatTime(
+                      run.elapsedTime
+                    )}
+                  </Text>
 
-                    <Text
-                      style={
-                        styles.runPace
-                      }
-                    >
-                      {formatPace(
-                        run.pace
-                      )}{" "}
-                      /km
-                    </Text>
-                  </View>
-                </Pressable>
-              )
-            )
+                  <Text style={styles.runPace}>
+                    {formatPace(run.pace)} /km
+                  </Text>
+                </View>
+              </Pressable>
+            ))
         )}
 
         {/* NAVIGATION */}
 
-        <View
-          style={
-            styles.bottomNav
-          }
-        >
-          <Pressable
-            style={
-              styles.navItem
-            }
-          >
-            <Text
-              style={
-                styles.navIcon
-              }
-            >
+        <View style={styles.bottomNav}>
+          <Pressable style={styles.navItem}>
+            <Text style={styles.navIcon}>
               🏠
             </Text>
 
-            <Text
-              style={
-                styles.activeNavText
-              }
-            >
+            <Text style={styles.activeNavText}>
               Home
             </Text>
           </Pressable>
 
           <Pressable
-            style={
-              styles.navItem
-            }
+            style={styles.navItem}
             onPress={() =>
-              router.push(
-                "/history"
-              )
+              router.push("/history")
             }
           >
-            <Text
-              style={
-                styles.navIcon
-              }
-            >
+            <Text style={styles.navIcon}>
               🏃
             </Text>
 
-            <Text
-              style={
-                styles.navText
-              }
-            >
+            <Text style={styles.navText}>
               Runs
             </Text>
           </Pressable>
 
           <Pressable
-            style={
-              styles.navItem
-            }
+            style={styles.navItem}
             onPress={() =>
-              router.push(
-                "/stats"
-              )
+              router.push("/stats")
             }
           >
-            <Text
-              style={
-                styles.navIcon
-              }
-            >
+            <Text style={styles.navIcon}>
               📊
             </Text>
 
-            <Text
-              style={
-                styles.navText
-              }
-            >
+            <Text style={styles.navText}>
               Stats
             </Text>
           </Pressable>
 
           <Pressable
-            style={
-              styles.navItem
-            }
+            style={styles.navItem}
             onPress={() =>
-              router.push(
-                "/profile-view"
-              )
+              router.push("/profile-view")
             }
           >
-            <Text
-              style={
-                styles.navIcon
-              }
-            >
+            <Text style={styles.navIcon}>
               👤
             </Text>
 
-            <Text
-              style={
-                styles.navText
-              }
-            >
+            <Text style={styles.navText}>
               Profile
             </Text>
           </Pressable>
         </View>
-
       </ScrollView>
     </View>
   );
@@ -698,8 +443,7 @@ const styles = StyleSheet.create({
 
   header: {
     flexDirection: "row",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
     alignItems: "center",
     marginTop: 20,
     marginBottom: 30,
@@ -744,8 +488,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingVertical: 22,
     flexDirection: "row",
-    justifyContent:
-      "space-around",
+    justifyContent: "space-around",
     alignItems: "center",
     marginBottom: 24,
   },
@@ -790,8 +533,7 @@ const styles = StyleSheet.create({
 
   recentHeader: {
     flexDirection: "row",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
     alignItems: "center",
   },
 
@@ -806,8 +548,7 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 12,
     flexDirection: "row",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
     alignItems: "center",
   },
 
@@ -869,8 +610,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingVertical: 14,
     flexDirection: "row",
-    justifyContent:
-      "space-around",
+    justifyContent: "space-around",
   },
 
   navItem: {

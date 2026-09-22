@@ -1,26 +1,18 @@
-import { router } from "expo-router";
-import { useState } from "react";
+import React, { useState } from "react";
 import {
-    Alert,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
+import { router } from "expo-router";
+import { Picker } from "@react-native-picker/picker";
 
-const goals = [
-  "General Fitness",
-  "Weight Loss",
-  "5K",
-  "10K",
-  "Half Marathon",
-  "Improve Pace",
-];
+import { saveProfile } from "../utils/profileStorage";
 
 export default function ProfileScreen() {
   const [name, setName] = useState("");
@@ -29,65 +21,32 @@ export default function ProfileScreen() {
   const [weight, setWeight] = useState("");
   const [goal, setGoal] = useState("");
 
-  const [showGoals, setShowGoals] = useState(false);
-
-  const handleContinue = () => {
-    if (!name.trim()) {
-      Alert.alert("Missing Name", "Please enter your name.");
-      return;
-    }
-
-    if (!age.trim()) {
-      Alert.alert("Missing Age", "Please enter your age.");
-      return;
-    }
-
-    if (!height.trim()) {
-      Alert.alert("Missing Height", "Please enter your height.");
-      return;
-    }
-
-    if (!weight.trim()) {
-      Alert.alert("Missing Weight", "Please enter your weight.");
-      return;
-    }
-
-    if (!goal) {
-      Alert.alert("Missing Goal", "Please select your running goal.");
-      return;
-    }
-
-    router.push({
-      pathname: "/home",
-      params: {
-        name: name.trim(),
-        age,
-        height,
-        weight,
-        goal,
-      },
+  const handleContinue = async () => {
+    await saveProfile({
+      name,
+      age,
+      height,
+      weight,
+      goal,
     });
+
+    router.replace("/home");
   };
 
   return (
     <KeyboardAvoidingView
-      style={styles.keyboardView}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>Tell us about yourself</Text>
+        <Text style={styles.title}>Create Your Profile</Text>
 
         <Text style={styles.subtitle}>
-          This helps us give you better insights.
+          Tell us a little about yourself
         </Text>
-
-        {/* Profile image placeholder */}
-        <View style={styles.avatarContainer}>
-          <Text style={styles.avatar}>👤</Text>
-        </View>
 
         {/* Name */}
         <Text style={styles.label}>Name</Text>
@@ -95,7 +54,6 @@ export default function ProfileScreen() {
         <TextInput
           style={styles.input}
           placeholder="Enter your name"
-          placeholderTextColor="#999999"
           value={name}
           onChangeText={setName}
         />
@@ -106,7 +64,6 @@ export default function ProfileScreen() {
         <TextInput
           style={styles.input}
           placeholder="Enter your age"
-          placeholderTextColor="#999999"
           value={age}
           onChangeText={setAge}
           keyboardType="numeric"
@@ -117,8 +74,7 @@ export default function ProfileScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="Enter your height (cm)"
-          placeholderTextColor="#999999"
+          placeholder="Enter your height"
           value={height}
           onChangeText={setHeight}
           keyboardType="numeric"
@@ -129,8 +85,7 @@ export default function ProfileScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="Enter your weight (kg)"
-          placeholderTextColor="#999999"
+          placeholder="Enter your weight"
           value={weight}
           onChangeText={setWeight}
           keyboardType="numeric"
@@ -139,39 +94,21 @@ export default function ProfileScreen() {
         {/* Running Goal */}
         <Text style={styles.label}>Running Goal</Text>
 
-        <Pressable
-          style={styles.input}
-          onPress={() => {
-            Keyboard.dismiss();
-            setShowGoals(!showGoals);
-          }}
-        >
-          <View style={styles.goalRow}>
-            <Text style={goal ? styles.goalText : styles.placeholderText}>
-              {goal || "Select your running goal"}
-            </Text>
-
-            <Text style={styles.arrow}>{showGoals ? "▲" : "▼"}</Text>
-          </View>
-        </Pressable>
-
-        {/* Goal options */}
-        {showGoals && (
-          <View style={styles.goalList}>
-            {goals.map((item) => (
-              <Pressable
-                key={item}
-                style={styles.goalOption}
-                onPress={() => {
-                  setGoal(item);
-                  setShowGoals(false);
-                }}
-              >
-                <Text style={styles.goalOptionText}>{item}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={goal}
+            onValueChange={(itemValue) => setGoal(itemValue)}
+          >
+            <Picker.Item label="Select your goal" value="" />
+            <Picker.Item label="5K" value="5K" />
+            <Picker.Item label="10K" value="10K" />
+            <Picker.Item
+              label="Half Marathon"
+              value="Half Marathon"
+            />
+            <Picker.Item label="Marathon" value="Marathon" />
+          </Picker>
+        </View>
 
         {/* Continue */}
         <Pressable style={styles.button} onPress={handleContinue}>
@@ -183,46 +120,28 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  keyboardView: {
+  container: {
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
 
-  container: {
-    paddingHorizontal: 24,
-    paddingTop: 70,
+  content: {
+    padding: 24,
+    paddingTop: 60,
     paddingBottom: 40,
   },
 
   title: {
-    marginTop: 10,
     fontSize: 28,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#111111",
-    textAlign: "center",
+    marginBottom: 8,
   },
 
   subtitle: {
-    textAlign: "center",
-    marginTop: 1,
     fontSize: 15,
-    color: "#777777",
-    lineHeight: 22,
-  },
-
-  avatarContainer: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: "#F1F1F1",
-    justifyContent: "center",
-    alignItems: "center",
-    alignSelf: "center",
-    marginVertical: 25,
-  },
-
-  avatar: {
-    fontSize: 42,
+    color: "#666666",
+    marginBottom: 32,
   },
 
   label: {
@@ -230,7 +149,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#222222",
     marginBottom: 8,
-    marginTop: 18,
+    marginTop: 16,
   },
 
   input: {
@@ -240,59 +159,24 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: "#111111",
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
+    backgroundColor: "#FAFAFA",
   },
 
-  placeholderText: {
-    color: "#999999",
-    fontSize: 16,
-  },
-
-  goalText: {
-    color: "#111111",
-    fontSize: 16,
-  },
-
-  goalRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  arrow: {
-    fontSize: 14,
-    color: "#666666",
-  },
-
-  goalList: {
-    marginTop: 8,
+  pickerContainer: {
     borderWidth: 1,
     borderColor: "#DDDDDD",
     borderRadius: 12,
+    backgroundColor: "#FAFAFA",
     overflow: "hidden",
-    backgroundColor: "#FFFFFF",
-  },
-
-  goalOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EEEEEE",
-  },
-
-  goalOptionText: {
-    fontSize: 15,
-    color: "#222222",
   },
 
   button: {
-    marginTop: 30,
+    height: 54,
+    borderRadius: 12,
     backgroundColor: "#20C96B",
-    paddingVertical: 17,
-    borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
+    marginTop: 32,
   },
 
   buttonText: {

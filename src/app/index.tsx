@@ -1,33 +1,63 @@
+
+import React from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+} from "react-native";
 import { router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+
+import { getProfile } from "../utils/profileStorage";
 
 export default function WelcomeScreen() {
+
+  // New user
+  const handleGetStarted = () => {
+    router.push("/profile");
+  };
+
+  // Existing user
+  const handleExistingAccount = async () => {
+    const profile = await getProfile();
+
+    if (profile) {
+      router.replace("/home");
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.illustrationContainer}>
-        <Text style={styles.runner}>🏃</Text>
-      </View>
 
-      <View style={styles.content}>
-        <Text style={styles.title}>
-          Welcome to <Text style={styles.highlight}>RunTrack</Text>
+      <Text style={styles.icon}>🏃</Text>
+
+      <Text style={styles.title}>
+        RunTrack
+      </Text>
+
+      <Text style={styles.subtitle}>
+        Track your runs. Improve your performance.
+      </Text>
+
+      {/* Get Started */}
+      <Pressable
+        style={styles.button}
+        onPress={handleGetStarted}
+      >
+        <Text style={styles.buttonText}>
+          Get Started
         </Text>
+      </Pressable>
 
-        <Text style={styles.subtitle}>
-          Track your runs, see your progress and become a better you.
+      {/* Existing Account */}
+      <Pressable
+        onPress={handleExistingAccount}
+      >
+        <Text style={styles.existingAccount}>
+          I already have an account
         </Text>
+      </Pressable>
 
-        <Pressable
-          style={styles.button}
-          onPress={() => router.push("/profile")}
-        >
-          <Text style={styles.buttonText}>Get Started</Text>
-        </Pressable>
-
-        <Pressable>
-          <Text style={styles.loginText}>I already have an account</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -36,52 +66,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 24,
-    paddingTop: 70,
-    paddingBottom: 40,
-  },
-
-  illustrationContainer: {
-    flex: 1,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
+    padding: 24,
   },
 
-  runner: {
-    fontSize: 100,
-  },
-
-  content: {
-    alignItems: "center",
+  icon: {
+    fontSize: 64,
+    marginBottom: 20,
   },
 
   title: {
-    fontSize: 30,
+    fontSize: 36,
     fontWeight: "800",
-    color: "#111111",
-    textAlign: "center",
-  },
-
-  highlight: {
     color: "#20C96B",
+    marginBottom: 10,
   },
 
   subtitle: {
-    marginTop: 12,
-    marginBottom: 30,
     fontSize: 16,
-    lineHeight: 24,
-    color: "#777777",
+    color: "#666666",
     textAlign: "center",
-    maxWidth: 320,
+    marginBottom: 40,
   },
 
   button: {
     width: "100%",
-    paddingVertical: 17,
-    borderRadius: 14,
+    height: 56,
     backgroundColor: "#20C96B",
+    borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
   },
 
   buttonText: {
@@ -90,9 +106,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  loginText: {
-    marginTop: 20,
-    fontSize: 14,
-    color: "#555555",
+  existingAccount: {
+    color: "#20C96B",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
